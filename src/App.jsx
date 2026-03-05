@@ -7,6 +7,7 @@ import {
   Hash, Type
 } from 'lucide-react';
 
+
 const CORE_DICTIONARY = {
   "#FAF4C8": {"MARD":"A01","COCO":"E02","漫漫":"E2","盼盼":"65","咪小窝":"77"},
   "#FFFFD5": {"MARD":"A02","COCO":"E01","漫漫":"B1","盼盼":"2","咪小窝":"2"},
@@ -40,6 +41,7 @@ const CORE_DICTIONARY = {
   "#888B8D": {"MARD":"H13","COCO":"A05","漫漫":"GR2","盼盼":"71","咪小窝":"04"}
 };
 
+// 辅助函数
 const hexToRgb = (hex) => {
   const bigint = parseInt(hex.replace('#', ''), 16);
   return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
@@ -85,6 +87,10 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('studio');
   const [viewMode, setViewMode] = useState('editor'); // editor | tracker (导出模式)
   
+  useEffect(() => {
+    document.title = "拼豆豆 - 创作工坊";
+  }, []);
+
   const [localHistory, setLocalHistory] = useState(() => {
     const saved = localStorage.getItem('pixelforge_data_v2');
     return saved ? JSON.parse(saved) : [];
