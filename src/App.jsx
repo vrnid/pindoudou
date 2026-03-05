@@ -3,8 +3,9 @@ import {
   Palette, Upload, Download, Layers, History, ShoppingBag, Settings, 
   CheckCircle2, Eye, Camera, FolderOpen, Save, Trash2, RefreshCw, 
   ChevronDown, ZoomIn, ZoomOut, Trophy, Star, Focus, Grid3X3, DownloadCloud,
-  Wand2, ShieldCheck, ListOrdered, Ban, SlidersHorizontal, X
+  Wand2, ShieldCheck, ListOrdered, Ban, SlidersHorizontal, X, Menu
 } from 'lucide-react';
+
 
 const CORE_DICTIONARY = {
   "#FAF4C8": {"MARD":"A01","COCO":"E02","漫漫":"E2","盼盼":"65","咪小窝":"77"},
@@ -22,8 +23,6 @@ const CORE_DICTIONARY = {
   "#94BFE2": {"MARD":"ZG6","COCO":"GB6","漫漫":"ZG6","盼盼":"259","咪小窝":"ZG6"},
   "#E2A9D2": {"MARD":"ZG7","COCO":"GB7","漫漫":"ZG7","盼盼":"260","咪小窝":"ZG7"},
   "#AB91C0": {"MARD":"ZG8","COCO":"GB8","漫漫":"ZG8","盼盼":"261","咪小窝":"ZG8"},
-  
-  // --- 补充的基础色库 ---
   "#FFFFFF": {"MARD":"T01","COCO":"A01","漫漫":"W1","盼盼":"1","咪小窝":"1"},
   "#1D1414": {"MARD":"H16","COCO":"A02","漫漫":"K1","盼盼":"18","咪小窝":"18"},
   "#2F2B2F": {"MARD":"H06","COCO":"A03","漫漫":"K2","盼盼":"19","咪小窝":"19"},
@@ -60,44 +59,20 @@ const rgbToLab = (r, g, b) => {
   return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
 };
 
-const generateFullPalette = () => {
-  const palette = Object.entries(CORE_DICTIONARY).map(([hex, brands]) => ({
-    hex, rgb: hexToRgb(hex), lab: rgbToLab(...hexToRgb(hex)), brands
-  }));
-  const remaining = 192 - palette.length;
-  for (let i = 0; i < remaining; i++) {
-    const hue = (i * 137.5) % 360; const sat = 45 + (i % 3) * 15; const lit = 30 + (i % 5) * 10;
-    const a = (sat * Math.min(lit, 100 - lit)) / 10000;
-    const f = n => {
-      const k = (n + hue / 30) % 12;
-      return Math.round(255 * (lit / 100 - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)));
-    };
-    const r = f(0), g = f(8), b = f(4);
-    const hex = `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`.toUpperCase();
-    palette.push({
-      hex, rgb: [r, g, b], lab: rgbToLab(r, g, b),
-      brands: { "MARD": `EX${i}`, "COCO": `C-EX${i}`, "漫漫": `M-EX${i}`, "盼盼": `P-EX${i}`, "咪小窝": `MI${i}` }
-    });
-  }
-  return palette;
-};
-const MASTER_PALETTE = generateFullPalette();
+const MASTER_PALETTE = Object.entries(CORE_DICTIONARY).map(([hex, brands]) => ({
+  hex, rgb: hexToRgb(hex), lab: rgbToLab(...hexToRgb(hex)), brands
+}));
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('studio');
   const [viewMode, setViewMode] = useState('editor'); 
+  const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
   
-  // ==========================================
-  // 本地存储逻辑：初始化读取
-  // ==========================================
   const [localHistory, setLocalHistory] = useState(() => {
     const saved = localStorage.getItem('pixelforge_data_v1');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // ==========================================
-  // 本地存储逻辑：变更自动保存
-  // ==========================================
   useEffect(() => {
     localStorage.setItem('pixelforge_data_v1', JSON.stringify(localHistory));
   }, [localHistory]);
@@ -107,40 +82,67 @@ const App = () => {
   const nextLevelXP = Math.pow(level, 2) * 500;
   const progress = Math.min((totalXP / nextLevelXP) * 100, 100);
 
-  // 核心属性
+  // 渲染配置
   const [originalImage, setOriginalImage] = useState(null);
   const [processedImage, setProcessedImage] = useState(null);
   const [gridWidth, setGridWidth] = useState(50);
   const [gridHeight, setGridHeight] = useState(50);
   const [colorSystemId, setColorSystemId] = useState('MARD'); 
   const [colorCount, setColorCount] = useState(48); 
-  const [pixelationMode, setPixelationMode] = useState('dominant'); 
   const [mergeThreshold, setMergeThreshold] = useState(24); 
+  const [pixelationMode, setPixelationMode] = useState('dominant'); 
   const [excludedColors, setExcludedColors] = useState(new Set()); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentPixelMap, setCurrentPixelMap] = useState([]); 
   const [exportSettings, setExportSettings] = useState({ showLabels: true, showStats: true }); 
-  const [isDragActive, setIsDragActive] = useState(false); 
   
-  // 水印图层属性 (画中画)
-  const [watermark, setWatermark] = useState(null); 
-  const [draggingWm, setDraggingWm] = useState(false);
-  const [resizingWm, setResizingWm] = useState(false);
-  const [wmDragStart, setWmDragStart] = useState({ x: 0, y: 0, wmX: 0, wmY: 0 });
-  const [wmResizeStart, setWmResizeStart] = useState({ x: 0, y: 0, wmW: 0, wmH: 0 });
-
   // 交互控制
   const [zoom, setZoom] = useState(0.8);
-  const [pan, setPan] = useState({ x: 100, y: 100 });
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const BASE_CELL_SIZE = 24; 
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, panX: 0, panY: 0 });
   const [trackPos, setTrackPos] = useState({ x: -1, y: -1 });
-  const [placedBeads, setPlacedBeads] = useState(new Set()); 
 
   const fileInputRef = useRef(null);
   const viewportRef = useRef(null); 
-  const contentRef = useRef(null);
+
+  // ==========================================
+  // 核心优化：以指针为中心的缩放逻辑
+  // ==========================================
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const onWheel = (e) => {
+      if (!originalImage) return;
+      e.preventDefault();
+
+      const rect = viewport.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const zoomSpeed = 0.12;
+      const zoomDelta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+
+      setZoom(prevZoom => {
+        const nextZoom = Math.min(Math.max(prevZoom + zoomDelta, 0.05), 10);
+        
+        // 计算缩放比，用于调整位移补偿
+        const ratio = nextZoom / prevZoom;
+
+        setPan(prevPan => ({
+          x: mouseX - (mouseX - prevPan.x) * ratio,
+          y: mouseY - (mouseY - prevPan.y) * ratio
+        }));
+
+        return nextZoom;
+      });
+    };
+
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', onWheel);
+  }, [originalImage]);
 
   const activePalette = useMemo(() => {
     return MASTER_PALETTE
@@ -148,75 +150,38 @@ const App = () => {
       .slice(0, colorCount); 
   }, [colorSystemId, excludedColors, colorCount]);
 
-  // 通用核心渲染引擎
   const processImageCore = async (src, w, palette, mode, threshold) => {
     const img = new Image(); img.src = src;
     await new Promise(r => img.onload = r);
     const h = Math.max(1, Math.round(w * (img.height / img.width)));
 
-    const origCvs = document.createElement('canvas');
-    origCvs.width = img.width; origCvs.height = img.height;
-    const origCtx = origCvs.getContext('2d');
-    origCtx.drawImage(img, 0, 0);
-    const origData = origCtx.getImageData(0, 0, img.width, img.height).data;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = mode === 'average';
+    ctx.drawImage(img, 0, 0, w, h);
+    const imageData = ctx.getImageData(0, 0, w, h).data;
 
-    const outCvs = document.createElement('canvas');
-    outCvs.width = w; outCvs.height = h;
-    const outCtx = outCvs.getContext('2d');
-    const outData = outCtx.createImageData(w, h);
-
-    const blockW = img.width / w;
-    const blockH = img.height / h;
+    const initialPixelMap = [];
     const initialCounts = {};
-    const pixelMap = new Array(w * h);
 
     const findMatchLab = (r, g, b) => {
       const targetLab = rgbToLab(r, g, b);
       let best = palette[0], minD = Infinity;
       for (let i = 0; i < palette.length; i++) {
         const c = palette[i];
-        const dl = targetLab[0] - c.lab[0];
-        const da = targetLab[1] - c.lab[1];
-        const db = targetLab[2] - c.lab[2];
-        const d = dl*dl + da*da + db*db; 
-        if (d < minD) { minD = d; best = c; }
+        const dist = Math.pow(targetLab[0]-c.lab[0],2) + Math.pow(targetLab[1]-c.lab[1],2) + Math.pow(targetLab[2]-c.lab[2],2);
+        if (dist < minD) { minD = dist; best = c; }
       }
       return best;
     };
 
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const startX = Math.floor(x * blockW);
-        const startY = Math.floor(y * blockH);
-        const endX = Math.floor((x + 1) * blockW);
-        const endY = Math.floor((y + 1) * blockH);
-        let r = 0, g = 0, b = 0, a = 0;
-
-        if (mode === 'average') {
-          let count = 0;
-          for (let py = startY; py < endY; py++) {
-            for (let px = startX; px < endX; px++) {
-              if (px >= img.width || py >= img.height) continue;
-              const idx = (py * img.width + px) * 4;
-              r += origData[idx]; g += origData[idx+1]; b += origData[idx+2]; a += origData[idx+3];
-              count++;
-            }
-          }
-          if (count > 0) { r = Math.round(r/count); g = Math.round(g/count); b = Math.round(b/count); a = Math.round(a/count); }
-        } else {
-          const cx = Math.min(Math.floor(startX + blockW / 2), img.width - 1);
-          const cy = Math.min(Math.floor(startY + blockH / 2), img.height - 1);
-          const idx = (cy * img.width + cx) * 4;
-          r = origData[idx]; g = origData[idx+1]; b = origData[idx+2]; a = origData[idx+3];
-        }
-
-        const pixelIndex = y * w + x;
-        if (a < 128) { pixelMap[pixelIndex] = null; continue; }
-
-        const match = findMatchLab(r, g, b);
-        pixelMap[pixelIndex] = match.hex;
-        initialCounts[match.hex] = (initialCounts[match.hex] || 0) + 1;
-      }
+    for (let i = 0; i < imageData.length; i += 4) {
+      const r = imageData[i], g = imageData[i+1], b = imageData[i+2], a = imageData[i+3];
+      if (a < 128) { initialPixelMap.push(null); continue; }
+      const match = findMatchLab(r, g, b);
+      initialPixelMap.push(match.hex);
+      initialCounts[match.hex] = (initialCounts[match.hex] || 0) + 1;
     }
 
     const sortedHexes = Object.keys(initialCounts).sort((a, b) => initialCounts[b] - initialCounts[a]);
@@ -229,31 +194,28 @@ const App = () => {
       let bestMatch = null; let minDist = Infinity;
       for (const keptHex of keptHexes) {
         const keptObj = palette.find(p => p.hex === keptHex);
-        const dl = colorObj.lab[0] - keptObj.lab[0];
-        const da = colorObj.lab[1] - keptObj.lab[1];
-        const db = colorObj.lab[2] - keptObj.lab[2];
-        const dist = Math.sqrt(dl*dl + da*da + db*db); 
+        const dist = Math.sqrt(Math.pow(colorObj.lab[0]-keptObj.lab[0],2)+Math.pow(colorObj.lab[1]-keptObj.lab[1],2)+Math.pow(colorObj.lab[2]-keptObj.lab[2],2));
         if (dist < minDist) { minDist = dist; bestMatch = keptHex; }
       }
       if (bestMatch && minDist <= effectiveThreshold) hexToMergedHex[hex] = bestMatch;
       else { hexToMergedHex[hex] = hex; keptHexes.push(hex); }
     }
 
-    const finalPixelMap = new Array(w * h);
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const pixelIndex = y * w + x;
-        const outIdx = pixelIndex * 4;
-        const initialHex = pixelMap[pixelIndex];
-        if (!initialHex) { outData.data[outIdx+3] = 0; finalPixelMap[pixelIndex] = null; continue; }
-        const finalHex = hexToMergedHex[initialHex];
-        finalPixelMap[pixelIndex] = finalHex;
-        const finalColor = palette.find(p => p.hex === finalHex);
-        outData.data[outIdx] = finalColor.rgb[0]; outData.data[outIdx+1] = finalColor.rgb[1]; outData.data[outIdx+2] = finalColor.rgb[2]; outData.data[outIdx+3] = 255;
-      }
+    const finalPixelMap = initialPixelMap.map(h => h ? hexToMergedHex[h] : null);
+    
+    const outCvs = document.createElement('canvas');
+    outCvs.width = w; outCvs.height = h;
+    const outCtx = outCvs.getContext('2d');
+    const outImgData = outCtx.createImageData(w, h);
+    for(let i=0; i<finalPixelMap.length; i++){
+        const hex = finalPixelMap[i];
+        if(hex){
+            const c = palette.find(p => p.hex === hex);
+            outImgData.data[i*4]=c.rgb[0]; outImgData.data[i*4+1]=c.rgb[1]; outImgData.data[i*4+2]=c.rgb[2]; outImgData.data[i*4+3]=255;
+        } else { outImgData.data[i*4+3]=0; }
     }
-    outCtx.putImageData(outData, 0, 0);
-    return { dataURL: outCvs.toDataURL(), counts: {}, pixelMap: finalPixelMap, height: h };
+    outCtx.putImageData(outImgData, 0, 0);
+    return { dataURL: outCvs.toDataURL(), pixelMap: finalPixelMap, height: h };
   };
 
   useEffect(() => {
@@ -265,150 +227,102 @@ const App = () => {
         setProcessedImage(res.dataURL);
         setCurrentPixelMap(res.pixelMap);
         setIsProcessing(false);
-      }, 100);
+      }, 150);
       return () => clearTimeout(t);
     }
   }, [gridWidth, originalImage, activePalette, pixelationMode, mergeThreshold]);
 
-  useEffect(() => {
-    if (watermark && watermark.original && activePalette.length > 0) {
-      const processWm = async () => {
-        const res = await processImageCore(watermark.original, watermark.gridWidth, activePalette, pixelationMode, mergeThreshold);
-        setWatermark(prev => ({ ...prev, dataURL: res.dataURL, pixelMap: res.pixelMap, gridHeight: res.height }));
-      };
-      const t = setTimeout(() => processWm(), 100);
-      return () => clearTimeout(t);
-    }
-  }, [watermark?.original, watermark?.gridWidth, activePalette, pixelationMode, mergeThreshold]);
-
-  const { displayPixelMap, displayStats } = useMemo(() => {
-    if (!currentPixelMap || currentPixelMap.length === 0) return { displayPixelMap: [], displayStats: [] };
-    const fMap = [...currentPixelMap];
+  const { displayStats } = useMemo(() => {
     const fCounts = {};
-    if (watermark && watermark.pixelMap && watermark.pixelMap.length > 0) {
-      const wmGridW = watermark.gridWidth;
-      const wmGridH = watermark.gridHeight;
-      const wmCellW = watermark.width / wmGridW;
-      const wmCellH = watermark.height / wmGridH;
-      for (let y = 0; y < gridHeight; y++) {
-        for (let x = 0; x < gridWidth; x++) {
-          const mainPx = x * BASE_CELL_SIZE + BASE_CELL_SIZE / 2;
-          const mainPy = y * BASE_CELL_SIZE + BASE_CELL_SIZE / 2;
-          if (mainPx >= watermark.x && mainPx < watermark.x + watermark.width && mainPy >= watermark.y && mainPy < watermark.y + watermark.height) {
-              const wmX = Math.floor((mainPx - watermark.x) / wmCellW);
-              const wmY = Math.floor((mainPy - watermark.y) / wmCellH);
-              if (wmX >= 0 && wmX < wmGridW && wmY >= 0 && wmY < wmGridH) {
-                  const wmHex = watermark.pixelMap[wmY * wmGridW + wmX];
-                  if (wmHex) fMap[y * gridWidth + x] = wmHex; 
-              }
-          }
-        }
-      }
+    currentPixelMap.forEach(hex => { if (hex) fCounts[hex] = (fCounts[hex] || 0) + 1; });
+    return { displayStats: Object.keys(fCounts).map(hex => ({ ...MASTER_PALETTE.find(p => p.hex === hex), count: fCounts[hex] })).sort((a,b) => b.count - a.count) };
+  }, [currentPixelMap, colorSystemId]);
+
+  const handleStart = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    if (viewMode === 'tracker' && !e.touches) {
+      const rect = viewportRef.current.getBoundingClientRect();
+      const x = Math.floor(((clientX - rect.left - pan.x) / zoom) / BASE_CELL_SIZE);
+      const y = Math.floor(((clientY - rect.top - pan.y) / zoom) / BASE_CELL_SIZE);
+      if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) setTrackPos({ x, y });
+    } else {
+      setIsDragging(true);
+      setDragStart({ x: clientX, y: clientY, panX: pan.x, panY: pan.y });
     }
-    for (let hex of fMap) { if (hex) fCounts[hex] = (fCounts[hex] || 0) + 1; }
-    const statsArray = Object.keys(fCounts).map(hex => ({ ...MASTER_PALETTE.find(p => p.hex === hex), count: fCounts[hex] })).sort((a,b) => b.count - a.count);
-    return { displayPixelMap: fMap, displayStats: statsArray };
-  }, [currentPixelMap, watermark, gridWidth, gridHeight, activePalette]);
+  };
+
+  const handleMove = (e) => {
+    if (!isDragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setPan({ x: dragStart.panX + (clientX - dragStart.x), y: dragStart.panY + (clientY - dragStart.y) });
+  };
 
   const toggleExcludeColor = (hex) => {
-    const newEx = new Set(excludedColors);
-    if (newEx.has(hex)) newEx.delete(hex);
-    else newEx.add(hex);
-    setExcludedColors(newEx);
-  };
-
-  const handleZoom = (e) => {
-    if (!originalImage || !viewportRef.current) return;
-    e.preventDefault();
-    const zoomDelta = e.deltaY > 0 ? -0.1 : 0.1;
-    const nextZoom = Math.min(Math.max(zoom + zoomDelta, 0.1), 8);
-    if (nextZoom === zoom) return;
-    const rect = viewportRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const pointX = (mouseX - pan.x) / zoom;
-    const pointY = (mouseY - pan.y) / zoom;
-    setZoom(nextZoom);
-    setPan({ x: mouseX - pointX * nextZoom, y: mouseY - pointY * nextZoom });
-  };
-
-  const processFile = (f) => {
-    if (f && f.type.startsWith('image/')) {
-      const r = new FileReader();
-      r.onload = (ev) => {
-        if (!originalImage) {
-          setOriginalImage(ev.target.result);
-          setZoom(0.8);
-          const i = new Image(); i.src = ev.target.result;
-          i.onload = () => {
-            setGridWidth(Math.min(i.width > i.height ? 60 : Math.round(60 * (i.width / i.height)), 300));
-            setPan({ x: 100, y: 100 });
-          };
-        } else {
-          const i = new Image(); i.src = ev.target.result;
-          i.onload = () => {
-            const aspect = i.height / i.width;
-            setWatermark({ original: ev.target.result, dataURL: null, x: 0, y: 0, width: 30 * BASE_CELL_SIZE, height: 30 * BASE_CELL_SIZE * aspect, gridWidth: 30, gridHeight: Math.round(30 * aspect), pixelMap: [] });
-          };
-        }
-      };
-      r.readAsDataURL(f);
-    }
+    const next = new Set(excludedColors);
+    if(next.has(hex)) next.delete(hex); else next.add(hex);
+    setExcludedColors(next);
   };
 
   const handleExportImage = async () => {
-    if (!processedImage || displayPixelMap.length === 0) return;
+    if (!processedImage || currentPixelMap.length === 0) return;
     const exportCellSize = exportSettings.showLabels ? 40 : 32; 
-    const padding = 30;
-    const gridW_px = gridWidth * exportCellSize;
-    const gridH_px = gridHeight * exportCellSize;
-    const statsH_px = exportSettings.showStats ? 400 : 0;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = gridW_px + padding * 2;
-    canvas.height = gridH_px + statsH_px + padding * 2;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const img = new Image(); img.src = processedImage;
-    await new Promise(r => img.onload = r);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, padding, padding, gridW_px, gridH_px);
+    const w_px = gridWidth * exportCellSize;
+    const h_px = gridHeight * exportCellSize;
+    const footerH = exportSettings.showStats ? 500 : 0;
+    canvas.width = w_px + 100; canvas.height = h_px + footerH + 100;
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    if (exportSettings.showLabels) {
-      ctx.font = 'bold 12px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      for (let y = 0; y < gridHeight; y++) {
-        for (let x = 0; x < gridWidth; x++) {
-          const hex = displayPixelMap[y * gridWidth + x];
-          if (hex) {
-            const colorObj = MASTER_PALETTE.find(p => p.hex === hex);
-            const [r, g, b] = colorObj.rgb;
-            ctx.fillStyle = (0.299 * r + 0.587 * g + 0.114 * b) > 140 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)';
-            ctx.fillText(colorObj.brands[colorSystemId] || '', padding + x * exportCellSize + exportCellSize/2, padding + y * exportCellSize + exportCellSize/2);
-          }
-        }
+    currentPixelMap.forEach((hex, i) => {
+      if (!hex) return;
+      const x = i % gridWidth, y = Math.floor(i / gridWidth);
+      ctx.fillStyle = hex; ctx.fillRect(50 + x * exportCellSize, 50 + y * exportCellSize, exportCellSize, exportCellSize);
+      if (exportSettings.showLabels) {
+        const color = MASTER_PALETTE.find(p => p.hex === hex);
+        ctx.fillStyle = hexToRgb(hex).reduce((a,b)=>a+b) > 400 ? '#000' : '#fff';
+        ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center';
+        ctx.fillText(color.brands[colorSystemId] || '', 50 + x * exportCellSize + exportCellSize/2, 50 + y * exportCellSize + exportCellSize/2 + 5);
       }
+    });
+
+    if(exportSettings.showStats){
+        ctx.fillStyle = '#000'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'left';
+        ctx.fillText('拼豆耗材清单', 50, h_px + 100);
+        displayStats.forEach((item, idx) => {
+            const row = Math.floor(idx / 4), col = idx % 4;
+            ctx.fillStyle = item.hex; ctx.fillRect(50 + col * 200, h_px + 140 + row * 40, 25, 25);
+            ctx.fillStyle = '#000'; ctx.font = '16px Arial';
+            ctx.fillText(`${item.brands[colorSystemId]}: ${item.count}颗`, 85 + col * 200, h_px + 160 + row * 40);
+        });
     }
     const link = document.createElement('a');
-    link.download = `拼豆图纸_${new Date().getTime()}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.download = `拼豆图纸_${Date.now()}.png`;
+    link.href = canvas.toDataURL();
     link.click();
   };
 
   return (
-    <div className="flex h-screen bg-[#FFF5F7] text-slate-800 font-sans overflow-hidden select-none">
-      <input type="file" ref={fileInputRef} onChange={e => processFile(e.target.files[0])} accept="image/*" className="hidden" />
+    <div className="flex flex-col md:flex-row h-screen bg-[#FFF5F7] text-slate-800 font-sans overflow-hidden select-none">
+      <input type="file" ref={fileInputRef} onChange={e => {
+          const f = e.target.files[0];
+          if (f) {
+            const r = new FileReader();
+            r.onload = (ev) => { setOriginalImage(ev.target.result); setZoom(0.8); setPan({x: 20, y: 20}); };
+            r.readAsDataURL(f);
+          }
+      }} accept="image/*" className="hidden" />
 
-      {/* 侧边导航 */}
-      <aside className="w-64 border-r-4 border-black flex flex-col p-5 bg-white z-20 flex-shrink-0 shadow-[4px_0_0_rgba(0,0,0,1)]">
+      {/* 侧边栏 */}
+      <aside className="hidden md:flex w-64 border-r-4 border-black flex-col p-5 bg-white z-20 flex-shrink-0 shadow-[4px_0_0_rgba(0,0,0,1)]">
         <div className="flex items-center space-x-3 px-1 py-2 mb-8">
           <div className="w-10 h-10 bg-[#FFD93D] border-2 border-black rounded-xl flex items-center justify-center shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
             <Palette className="text-black" size={24} />
           </div>
           <h1 className="text-2xl font-black tracking-tighter text-black uppercase">拼拼豆</h1>
         </div>
-        
         <nav className="flex-1 space-y-4 font-bold text-sm">
           <button onClick={() => setActiveTab('explore')} className={`w-full flex items-center space-x-3 px-4 py-4 rounded-2xl border-2 transition-all ${activeTab === 'explore' ? 'bg-[#FF85A1] text-white border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'text-slate-500 border-transparent hover:bg-pink-50'}`}>
             <History size={20} /> <span>灵感记录馆</span>
@@ -417,206 +331,105 @@ const App = () => {
             <Palette size={20} /> <span>创作工坊</span>
           </button>
         </nav>
-
-        {/* 成就系统 */}
-        <div className="p-4 bg-white rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mt-auto bg-gradient-to-b from-white to-slate-50">
-          <div className="flex items-center justify-between mb-2 font-black italic text-[#FFD93D]">
-            <div className="flex items-center"><Trophy size={14} className="mr-1" /><span className="text-[10px]">经验成就</span></div>
-            <span className="text-[10px] text-slate-400">等级 {level}</span>
-          </div>
-          <div className="w-full bg-slate-100 h-2 rounded-full border border-black overflow-hidden mb-2">
-             <div className="bg-[#6BCBCA] h-full transition-all duration-700" style={{ width: `${progress}%` }}></div>
-          </div>
-          <div className="flex justify-between text-[8px] font-black text-slate-400 italic">
-             <span>{totalXP} 经验 (已存本地)</span>
-             <span>距升级需 {nextLevelXP - totalXP}</span>
-          </div>
+        <div className="p-4 bg-white rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mt-auto font-black italic text-[10px]">
+          <div className="flex justify-between mb-1"><span>LV.{level}</span><span>{totalXP} XP</span></div>
+          <div className="w-full bg-slate-100 h-2 rounded-full border border-black overflow-hidden"><div className="bg-[#6BCBCA] h-full" style={{ width: `${progress}%` }}></div></div>
         </div>
       </aside>
 
-      {/* 主画布区 */}
+      {/* 工作区 */}
       <main className="flex-1 flex flex-col min-w-0 relative overflow-hidden">
-        <header className="h-16 border-b-4 border-black flex items-center justify-between px-8 bg-white/80 backdrop-blur-md z-30 flex-shrink-0">
+        <header className="h-16 border-b-4 border-black flex items-center justify-between px-4 md:px-8 bg-white/80 backdrop-blur-md z-30">
           <div className="flex bg-slate-100 border-2 border-black p-0.5 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <button onClick={() => setViewMode('editor')} className={`px-5 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'editor' ? 'bg-black text-white shadow-sm' : 'text-slate-500 hover:text-black'}`}>编辑器</button>
-            <button onClick={() => setViewMode('tracker')} className={`px-5 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'tracker' ? 'bg-[#FF85A1] text-white shadow-sm' : 'text-slate-500 hover:text-[#FF85A1]'}`}>辅助制作模式 ✨</button>
+            <button onClick={() => setViewMode('editor')} className={`px-4 py-1.5 rounded-md text-[10px] md:text-xs font-bold ${viewMode === 'editor' ? 'bg-black text-white' : 'text-slate-500'}`}>编辑器</button>
+            <button onClick={() => setViewMode('tracker')} className={`px-4 py-1.5 rounded-md text-[10px] md:text-xs font-bold ${viewMode === 'tracker' ? 'bg-[#FF85A1] text-white' : 'text-slate-500'}`}>辅助模式 ✨</button>
           </div>
-          <div className="flex items-center space-x-4 text-xs font-black uppercase italic">
-            <button onClick={() => fileInputRef.current.click()} className="text-[#FF85A1] hover:underline flex items-center space-x-1"><RefreshCw size={14} className="mr-1"/>更换底稿</button>
-            <button onClick={() => { setOriginalImage(null); setProcessedImage(null); setExcludedColors(new Set()); setWatermark(null); setPan({x: 100, y: 100}); setZoom(0.8); }} className="bg-[#FFD93D] border-2 border-black px-4 py-1.5 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:bg-yellow-300 font-black text-xs uppercase italic">重置</button>
-          </div>
+          <button onClick={() => setIsMobilePanelOpen(!isMobilePanelOpen)} className="md:hidden p-2 bg-white border-2 border-black rounded-lg">{isMobilePanelOpen ? <X size={20}/> : <Menu size={20}/>}</button>
+          <button onClick={() => setOriginalImage(null)} className="hidden md:block bg-[#FFD93D] border-2 border-black px-4 py-1.5 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] font-black text-xs">重置</button>
         </header>
 
-        <div className="flex-1 flex min-h-0 overflow-hidden" onWheel={handleZoom} onMouseMove={(e) => {
-            if (draggingWm) {
-                setWatermark(p => ({ ...p, x: wmDragStart.wmX + (e.clientX - wmDragStart.x) / zoom, y: wmDragStart.wmY + (e.clientY - wmDragStart.y) / zoom }));
-            } else if (resizingWm) {
-                const nw = Math.max(BASE_CELL_SIZE, wmResizeStart.wmW + (e.clientX - wmResizeStart.x) / zoom);
-                setWatermark(p => ({ ...p, width: nw, height: nw * (p.height / p.width), gridWidth: Math.max(1, Math.round(nw / BASE_CELL_SIZE)) }));
-            } else if (isDragging) {
-                setPan({ x: dragStart.panX + (e.clientX - dragStart.x), y: dragStart.panY + (e.clientY - dragStart.y) });
-            }
-        }} onMouseUp={() => { setIsDragging(false); setDraggingWm(false); setResizingWm(false); }}>
-          
-          {activeTab === 'studio' && (
-            <>
-              {/* 画布核心 */}
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+          <div 
+            ref={viewportRef}
+            className={`flex-1 relative overflow-hidden bg-slate-200 touch-none flex items-center justify-center ${isDragging ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+            onMouseDown={handleStart} onMouseMove={handleMove} onMouseUp={() => setIsDragging(false)}
+            onTouchStart={handleStart} onTouchMove={handleMove} onTouchEnd={() => setIsDragging(false)}
+          >
+            {originalImage ? (
               <div 
-                ref={viewportRef}
-                className={`flex-1 relative overflow-hidden flex items-start justify-start min-w-0 ${isDragging ? 'cursor-grabbing' : (originalImage ? 'cursor-crosshair' : 'cursor-default')}`}
-                onMouseDown={(e) => {
-                  if (viewMode === 'tracker') {
-                    const rect = viewportRef.current.getBoundingClientRect();
-                    const x = Math.floor(((e.clientX - rect.left - pan.x) / zoom) / BASE_CELL_SIZE);
-                    const y = Math.floor(((e.clientY - rect.top - pan.y) / zoom) / BASE_CELL_SIZE);
-                    if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) setTrackPos({ x, y });
-                  } else {
-                    setIsDragging(true);
-                    setDragStart({ x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y });
-                  }
-                }}
+                className="absolute bg-white shadow-2xl border-4 border-black origin-top-left" 
+                style={{ width: gridWidth * BASE_CELL_SIZE, height: gridHeight * BASE_CELL_SIZE, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, willChange: 'transform' }}
               >
-                <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #000 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}></div>
-                
-                {originalImage ? (
-                  <div className="absolute bg-white shadow-2xl border-4 border-black origin-top-left" style={{ width: gridWidth * BASE_CELL_SIZE, height: gridHeight * BASE_CELL_SIZE, transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, willChange: 'transform' }}>
-                    <img src={processedImage || originalImage} className="absolute inset-0 w-full h-full object-fill block" style={{ imageRendering: 'pixelated' }} />
-                    {watermark && watermark.dataURL && (
-                        <div style={{ position: 'absolute', left: watermark.x, top: watermark.y, width: watermark.width, height: watermark.height, border: '2px dashed #FF85A1', zIndex: 20, cursor: draggingWm ? 'grabbing' : 'grab' }} 
-                             onMouseDown={(e) => { e.stopPropagation(); setDraggingWm(true); setWmDragStart({ x: e.clientX, y: e.clientY, wmX: watermark.x, wmY: watermark.y }); }}>
-                            <img src={watermark.dataURL} style={{width: '100%', height: '100%', imageRendering: 'pixelated'}} />
-                            <div onClick={() => setWatermark(null)} className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-1 cursor-pointer border-2 border-black shadow-md z-30"><X size={12} strokeWidth={4} /></div>
-                            <div className="absolute -bottom-2 -right-2 w-5 h-5 bg-[#FF85A1] cursor-nwse-resize rounded-full border-2 border-black" onMouseDown={(e) => { e.stopPropagation(); setResizingWm(true); setWmResizeStart({ x: e.clientX, y: e.clientY, wmW: watermark.width, wmH: watermark.height }); }}></div>
-                        </div>
-                    )}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-10 opacity-30"><defs><pattern id="grid" width={BASE_CELL_SIZE} height={BASE_CELL_SIZE} patternUnits="userSpaceOnUse"><path d={`M ${BASE_CELL_SIZE} 0 L 0 0 0 ${BASE_CELL_SIZE}`} fill="none" stroke="#000" strokeWidth="1" /></pattern></defs><rect width="100%" height="100%" fill="url(#grid)" /></svg>
-                    {viewMode === 'tracker' && trackPos.x !== -1 && (
-                        <div className="absolute z-40 border-4 border-black shadow-2xl animate-pulse" style={{ left: trackPos.x * BASE_CELL_SIZE, top: trackPos.y * BASE_CELL_SIZE, width: BASE_CELL_SIZE, height: BASE_CELL_SIZE }}>
-                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-[#FFD93D] text-[10px] px-2 py-0.5 rounded font-black whitespace-nowrap">坐标: {trackPos.x + 1}, {trackPos.y + 1}</div>
-                        </div>
-                    )}
-                    {isProcessing && <div className="absolute inset-0 z-50 bg-white/70 backdrop-blur-sm flex items-center justify-center font-black italic text-[#FF85A1]">网格重采样渲染中...</div>}
-                  </div>
-                ) : (
-                  <div className="m-auto w-full max-w-md p-10 bg-white border-4 border-black rounded-[3rem] flex flex-col items-center justify-center text-center space-y-5 cursor-pointer shadow-[8px_8px_0px_rgba(0,0,0,1)] group" onClick={() => fileInputRef.current.click()}>
-                    <div className="w-20 h-20 bg-[#FFD93D] border-4 border-black rounded-[2rem] flex items-center justify-center shadow-[6px_6px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform"><Upload size={40}/></div>
-                    <h3 className="text-xl font-black italic uppercase text-black">导入底稿或拖拽文件</h3>
-                  </div>
-                )}
+                <img 
+                  src={processedImage || originalImage} 
+                  draggable="false"
+                  onDragStart={(e) => e.preventDefault()}
+                  className="absolute inset-0 w-full h-full object-fill block" 
+                  style={{ imageRendering: 'pixelated' }} 
+                />
+                <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-20"><defs><pattern id="grid" width={BASE_CELL_SIZE} height={BASE_CELL_SIZE} patternUnits="userSpaceOnUse"><path d={`M ${BASE_CELL_SIZE} 0 L 0 0 0 ${BASE_CELL_SIZE}`} fill="none" stroke="#000" strokeWidth="1" /></pattern></defs><rect width="100%" height="100%" fill="url(#grid)" /></svg>
+                {viewMode === 'tracker' && trackPos.x !== -1 && <div className="absolute z-40 border-4 border-black shadow-2xl animate-pulse bg-pink-500/20" style={{ left: trackPos.x * BASE_CELL_SIZE, top: trackPos.y * BASE_CELL_SIZE, width: BASE_CELL_SIZE, height: BASE_CELL_SIZE }} />}
               </div>
+            ) : (
+              <div className="m-auto w-full max-w-xs md:max-w-md p-8 bg-white border-4 border-black rounded-[3rem] text-center space-y-5 shadow-[8px_8px_0px_rgba(0,0,0,1)]" onClick={() => fileInputRef.current.click()}>
+                <div className="w-16 h-16 md:w-20 md:h-20 bg-[#FFD93D] border-4 border-black rounded-[2rem] m-auto flex items-center justify-center shadow-[6px_6px_0px_rgba(0,0,0,1)]"><Upload size={32}/></div>
+                <h3 className="text-lg md:text-xl font-black italic">点击导入底稿</h3>
+              </div>
+            )}
+            
+            <div className="absolute bottom-4 left-4 flex flex-col space-y-2 md:hidden z-30">
+              <button onClick={() => setZoom(z => Math.min(z + 0.2, 8))} className="p-3 bg-white border-2 border-black rounded-full shadow-md"><ZoomIn size={20}/></button>
+              <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.05))} className="p-3 bg-white border-2 border-black rounded-full shadow-md"><ZoomOut size={20}/></button>
+            </div>
+          </div>
 
-              {/* 渲染控制台 */}
-              <div className="w-80 border-l-4 border-black bg-white flex flex-shrink-0 z-20 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] p-4 space-y-4 flex-col overflow-y-auto custom-scrollbar">
-                {viewMode === 'editor' ? (
-                  <>
-                    <div className="bg-white rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-                      <h4 className="font-black text-xs uppercase mb-3 text-[#FF85A1] flex items-center"><SlidersHorizontal size={14} className="mr-2" /> 渲染控制台</h4>
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 italic mb-2"><span>主网格宽度 (颗粒): {gridWidth}</span></div>
-                          <input type="range" min="10" max="300" value={gridWidth} onChange={(e) => setGridWidth(parseInt(e.target.value))} className="w-full accent-black" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 italic mb-2"><span>颜色合并阈值: {mergeThreshold}</span></div>
-                          <input type="range" min="0" max="100" value={mergeThreshold} onChange={(e) => setMergeThreshold(parseInt(e.target.value))} className="w-full accent-black" />
-                          <p className="text-[8px] text-slate-400 font-bold mt-1.5 leading-tight italic">数值越大，相近色合并越多，起消噪作用。</p>
-                        </div>
-                        <div>
-                           <div className="text-[10px] font-bold text-slate-400 italic mb-2">像素化采样模式</div>
-                           <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => setPixelationMode('dominant')} className={`py-1.5 text-[10px] font-black rounded-lg border-2 border-black transition-all ${pixelationMode === 'dominant' ? 'bg-black text-white shadow-sm' : 'bg-white hover:bg-slate-50'}`}>卡通 (中心色)</button>
-                              <button onClick={() => setPixelationMode('average')} className={`py-1.5 text-[10px] font-black rounded-lg border-2 border-black transition-all ${pixelationMode === 'average' ? 'bg-black text-white shadow-sm' : 'bg-white hover:bg-slate-50'}`}>真实 (均值色)</button>
-                           </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 italic mb-2">国内品牌色系对标</div>
-                          <div className="grid grid-cols-3 gap-2">
-                            {['MARD', 'COCO', '漫漫', '盼盼', '咪小窝'].map(brand => (
-                              <button key={brand} onClick={() => setColorSystemId(brand)} className={`py-1.5 rounded-lg border-2 border-black font-black text-[10px] ${colorSystemId === brand ? 'bg-[#6BCBCA] text-white' : 'bg-white hover:bg-emerald-50'}`}>{brand}</button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 italic mb-2"><span>应用色彩总数: {colorCount}</span></div>
-                          <div className="grid grid-cols-3 gap-2">
-                            {[12, 24, 48, 72, 96, 192].map(count => (
-                              <button key={count} onClick={() => setColorCount(count)} className={`py-1.5 rounded-lg border-2 border-black font-black text-[10px] ${colorCount === count ? 'bg-black text-white' : 'bg-white hover:bg-slate-100'}`}>{count}</button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex-1 overflow-hidden flex flex-col">
-                      <h4 className="font-black text-xs uppercase mb-3 text-emerald-500 flex items-center"><ShieldCheck size={14} className="mr-2" /> 点击剔除杂色</h4>
-                      <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
-                        {displayStats.map((item, idx) => (
-                          <div key={idx} onClick={() => toggleExcludeColor(item.hex)} className={`flex items-center justify-between p-2 rounded-xl border-2 transition-all cursor-pointer ${excludedColors.has(item.hex) ? 'bg-red-50 border-red-300 opacity-60' : 'bg-slate-50 border-transparent hover:border-black'}`}>
-                            <div className="flex items-center space-x-2">
-                              <div className="w-5 h-5 rounded-full border-2 border-black" style={{backgroundColor: item.hex}}></div>
-                              <span className="text-[9px] font-black">{item.brands[colorSystemId]}</span>
-                            </div>
-                            <span className="text-xs font-black italic">{item.count} 颗</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    {originalImage && (
-                        <button onClick={() => {
-                          const count = displayStats.reduce((acc, item) => acc + item.count, 0);
-                          setLocalHistory([{ id: Date.now(), title: `${colorSystemId} 创作图纸`, date: new Date().toLocaleDateString(), image: processedImage, totalCount: count }, ...localHistory]);
-                          setActiveTab('explore');
-                        }} className="w-full py-4 bg-[#FF85A1] text-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] font-black text-xs uppercase italic rounded-2xl active:translate-y-1 transition-all">保存图纸并赚取 XP</button>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex-1 flex flex-col space-y-4">
-                    <div className="bg-white rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-                        <h4 className="font-black text-xs uppercase mb-3 text-[#FF85A1] flex items-center"><Focus size={14} className="mr-2" /> 制作导航仪</h4>
-                        <div className="flex items-center justify-between p-4 bg-slate-50 border-2 border-black border-dashed rounded-xl mb-4">
-                            <span className="text-[10px] font-black italic">锁定坐标:</span>
-                            <span className="text-sm font-black text-[#FF85A1]">{trackPos.x === -1 ? '--' : `${trackPos.x+1}, ${trackPos.y+1}`}</span>
-                        </div>
-                        <button onClick={() => setPlacedBeads(new Set([...placedBeads, `${trackPos.x},${trackPos.y}`]))} disabled={trackPos.x === -1} className="w-full py-3 bg-black text-white rounded-xl text-[10px] font-black italic disabled:opacity-30 transition-all shadow-[3px_3px_0px_rgba(0,0,0,1)]">标记此颗粒已完成</button>
-                    </div>
-                    <button onClick={handleExportImage} className="w-full py-4 bg-[#6BCBCA] text-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] font-black text-xs uppercase italic rounded-2xl active:translate-y-1"><DownloadCloud size={16} className="inline mr-2"/>导出高清图纸 (PNG)</button>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          {activeTab === 'explore' && (
-            <div className="flex-1 p-10 overflow-auto bg-[#FFF9FA] custom-scrollbar">
-              <div className="flex items-end justify-between mb-8 border-b-4 border-black pb-4">
-                <h2 className="text-4xl font-black italic tracking-tighter text-black uppercase underline decoration-pink-300 decoration-8">创作记录馆</h2>
-                <div className="flex items-center space-x-2 bg-black text-white px-5 py-3 rounded-2xl font-black italic text-xs shadow-xl"><Star size={16} className="text-[#FFD93D] fill-[#FFD93D] mr-2" /><span>总工艺值: {totalXP} XP</span></div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {localHistory.map(item => (
-                  <div key={item.id} className="bg-white border-4 border-black rounded-[2rem] overflow-hidden shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] group hover:-translate-y-2 transition-all">
-                    <div className="aspect-square border-b-4 border-black flex items-center justify-center p-4 bg-slate-50"><img src={item.image} className="max-w-full max-h-full object-contain pixelated" /></div>
-                    <div className="p-5 flex flex-col space-y-4">
-                      <div className="flex justify-between items-center text-black">
-                         <h3 className="font-black italic text-xs truncate uppercase tracking-tighter">{item.title}</h3>
-                         <span className="text-[9px] bg-[#6BCBCA]/20 text-[#2d7c7a] px-2 py-0.5 rounded-lg border border-[#6BCBCA]/30 font-bold">+{item.totalCount} XP</span>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button onClick={() => { setOriginalImage(item.image); setActiveTab('studio'); setViewMode('editor'); }} className="flex-1 py-2.5 bg-black text-white rounded-xl text-[10px] italic shadow-[3px_3px_0px_rgba(255,133,161,1)]">再次编辑</button>
-                        <button onClick={() => setLocalHistory(localHistory.filter(h => h.id !== item.id))} className="p-2 border-2 border-black rounded-xl text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16} /></button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          <aside className={`fixed md:relative inset-y-0 right-0 w-80 bg-white border-l-4 border-black z-40 p-4 space-y-4 overflow-y-auto custom-scrollbar transform transition-transform ${isMobilePanelOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+            <div className="bg-white rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+              <h4 className="font-black text-xs uppercase mb-3 text-[#FF85A1] flex items-center"><SlidersHorizontal size={14} className="mr-2" /> 渲染控制台</h4>
+              <div className="space-y-4">
+                <div><div className="flex justify-between text-[10px] font-bold text-slate-400 mb-2"><span>网格密度: {gridWidth}</span></div><input type="range" min="10" max="300" value={gridWidth} onChange={(e) => setGridWidth(parseInt(e.target.value))} className="w-full accent-black" /></div>
+                <div><div className="flex justify-between text-[10px] font-bold text-slate-400 mb-2"><span>合并消噪: {mergeThreshold}</span></div><input type="range" min="0" max="100" value={mergeThreshold} onChange={(e) => setMergeThreshold(parseInt(e.target.value))} className="w-full accent-black" /></div>
+                <div><div className="text-[10px] font-bold text-slate-400 mb-2">渲染模式</div><div className="grid grid-cols-2 gap-2"><button onClick={() => setPixelationMode('dominant')} className={`py-1.5 text-[9px] font-black border-2 border-black rounded-lg ${pixelationMode === 'dominant' ? 'bg-black text-white' : 'bg-white'}`}>卡通</button><button onClick={() => setPixelationMode('average')} className={`py-1.5 text-[9px] font-black border-2 border-black rounded-lg ${pixelationMode === 'average' ? 'bg-black text-white' : 'bg-white'}`}>真实</button></div></div>
+                <div><div className="text-[10px] font-bold text-slate-400 mb-2">对标品牌</div><div className="grid grid-cols-3 gap-1">{['MARD', 'COCO', '漫漫', '盼盼', '咪小窝'].map(brand => (<button key={brand} onClick={() => setColorSystemId(brand)} className={`py-1.5 rounded-lg border-2 border-black font-black text-[9px] ${colorSystemId === brand ? 'bg-[#6BCBCA] text-white' : 'bg-white'}`}>{brand}</button>))}</div></div>
+                <div><div className="text-[10px] font-bold text-slate-400 mb-2">色彩上限</div><div className="grid grid-cols-3 gap-1">{[12, 24, 48, 72, 96, 192].map(c => (<button key={c} onClick={() => setColorCount(c)} className={`py-1 rounded-lg border-2 border-black font-black text-[9px] ${colorCount === c ? 'bg-black text-white' : 'bg-white'}`}>{c}</button>))}</div></div>
               </div>
             </div>
-          )}
+
+            <div className="bg-white rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex-1 flex flex-col min-h-[200px]">
+              <h4 className="font-black text-xs uppercase mb-3 text-emerald-500 flex items-center"><ShieldCheck size={14} className="mr-2" /> 实时清单</h4>
+              <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">{displayStats.map((item, idx) => (<div key={idx} onClick={() => toggleExcludeColor(item.hex)} className={`flex items-center justify-between p-2 rounded-xl border-2 transition-all cursor-pointer ${excludedColors.has(item.hex) ? 'bg-red-50 border-red-300 opacity-40' : 'bg-slate-50 border-transparent hover:border-black'}`}><div className="flex items-center space-x-2"><div className="w-5 h-5 rounded-full border-2 border-black" style={{backgroundColor: item.hex}}></div><span className="text-[9px] font-black">{item.brands[colorSystemId]}</span></div><span className="text-xs font-black italic">{item.count} 颗</span></div>))}</div>
+            </div>
+
+            <div className="bg-white rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+                <h4 className="font-black text-xs uppercase mb-3 text-[#6BCBCA] flex items-center"><Download size={14} className="mr-2" /> 导出设置</h4>
+                <div className="space-y-3"><label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" checked={exportSettings.showLabels} onChange={e => setExportSettings(prev => ({ ...prev, showLabels: e.target.checked }))} className="w-4 h-4 accent-black" /><span className="text-[10px] font-black">显示色号标签 (PDF)</span></label><label className="flex items-center space-x-2 cursor-pointer"><input type="checkbox" checked={exportSettings.showStats} onChange={e => setExportSettings(prev => ({ ...prev, showStats: e.target.checked }))} className="w-4 h-4 accent-black" /><span className="text-[10px] font-black">显示耗材清单</span></label></div>
+            </div>
+            <button onClick={handleExportImage} className="w-full py-4 bg-[#6BCBCA] text-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] font-black text-xs uppercase italic rounded-2xl flex items-center justify-center space-x-2"><DownloadCloud size={16}/><span>导出图纸</span></button>
+          </aside>
         </div>
+
+        <nav className="flex md:hidden h-16 border-t-4 border-black bg-white z-30">
+          <button onClick={() => setActiveTab('studio')} className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'studio' ? 'text-[#FF85A1]' : 'text-slate-400'}`}><Palette size={20}/><span className="text-[10px] font-bold">工作台</span></button>
+          <button onClick={() => setActiveTab('explore')} className={`flex-1 flex flex-col items-center justify-center ${activeTab === 'explore' ? 'text-[#FF85A1]' : 'text-slate-400'}`}><History size={20}/><span className="text-[10px] font-bold">记录馆</span></button>
+        </nav>
       </main>
 
+      {activeTab === 'explore' && (
+        <div className="fixed inset-0 z-50 bg-[#FFF9FA] overflow-auto p-6 md:p-10 pb-24 md:pb-10">
+          <div className="flex items-center justify-between mb-8 border-b-4 border-black pb-4"><h2 className="text-2xl md:text-4xl font-black italic tracking-tighter uppercase underline">创作记录馆</h2><button onClick={() => setActiveTab('studio')} className="bg-black text-white px-5 py-2 rounded-xl text-xs font-bold shadow-xl">返回</button></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">{localHistory.map(item => (<div key={item.id} className="bg-white border-4 border-black rounded-[2rem] overflow-hidden shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] group">
+            <div className="aspect-square border-b-4 border-black flex items-center justify-center p-4 bg-slate-50">
+              <img src={item.image} draggable="false" className="max-w-full max-h-full object-contain pixelated" />
+            </div>
+            <div className="p-5 space-y-4"><div className="flex justify-between items-center text-black"><h3 className="font-black italic text-xs truncate uppercase">{item.title}</h3><span className="text-[9px] font-bold">+{item.totalCount} XP</span></div><div className="flex space-x-2"><button onClick={() => { setOriginalImage(item.image); setActiveTab('studio'); setIsMobilePanelOpen(false); }} className="flex-1 py-2.5 bg-black text-white rounded-xl text-[10px] italic shadow-[3px_3px_0px_rgba(255,133,161,1)]">编辑</button><button onClick={() => setLocalHistory(localHistory.filter(h => h.id !== item.id))} className="p-2 border-2 border-black rounded-xl text-red-500"><Trash2 size={16} /></button></div></div></div>))}</div>
+        </div>
+      )}
+
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #000; border-radius: 10px; border: 2px solid white; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #000; cursor: pointer; border: 3px solid white; box-shadow: 3px 3px 0px rgba(0,0,0,0.1); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #000; border-radius: 10px; }
+        input[type=range] { -webkit-appearance: none; height: 6px; background: #eee; border-radius: 5px; border: 1px solid #000; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #FFD93D; border: 2px solid #000; box-shadow: 2px 2px 0px #000; cursor: pointer; }
       `}</style>
     </div>
   );
